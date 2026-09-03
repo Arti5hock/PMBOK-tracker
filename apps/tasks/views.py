@@ -52,7 +52,7 @@ class TaskRaciMatrixViewSet(viewsets.ModelViewSet):
         if not project_id:
             return Response({'error': 'Параметр query project обязателен'}, status=400)
 
-        tasks = Task.objects.filter(project_id=project_id, project__owner=request.user)
+        tasks = Task.objects.filter(project_id=project_id, project__owner=request.user).exclude(status='done')
         result = []
         for task in tasks:
             assignments = task.raci_assignments.all().select_related('user')
