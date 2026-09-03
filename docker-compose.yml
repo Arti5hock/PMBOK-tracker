@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pmbok_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:alpine
+    container_name: pmbok_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  web:
+    build: .
+    container_name: pmbok_web
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build: .
+    container_name: pmbok_celery_worker
+    restart: unless-stopped
+    command: celery -A config worker --loglevel=info
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  beat:
+    build: .
+    container_name: pmbok_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat --loglevel=info
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  postgres_data:
