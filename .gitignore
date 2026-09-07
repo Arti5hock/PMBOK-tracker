@@ -1,13 +1,17 @@
 ```
 # Dependencies
 node_modules/
+frontend/node_modules/
 
 # Build artifacts
 dist/
 build/
 target/
+*.o
+*.obj
+*.out
 
-# Python
+# Python specific
 __pycache__/
 *.pyc
 *.pyo
@@ -17,32 +21,92 @@ env/
 venv/
 .venv/
 .ENV
-.ENV.local
-.env
-.env.local
-.env.
 .python-version
-
-# Logs
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# IDE
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
+*~
 
-# OS
+# System files
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Icon?
+.directory
+.Trashes
+*.nib
 
-# Migrations
-apps/*/migrations/*.py
-!apps/*/migrations/__init__.py
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV
+.venv/
+.ENV
+.ENV.*
+.venv.*
+env.*
+venv.*
+env.bak
+venv.bak
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Frontend specific
+.vite/
+frontend/.vite/
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.gz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.jar
+*.war
+*.par
+*.sar
+*.ear
+*.zip-internal
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
 ```
