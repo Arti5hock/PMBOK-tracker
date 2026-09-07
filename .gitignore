@@ -46,6 +46,16 @@ media/
 *.db
 *.pid
 
+# Никаких баз данных и секретов
+*.sqlite3
+db.sqlite3
+.env
+
+# Никаких библиотек и файлов юзеров
+node_modules/
+frontend/node_modules/
+media/
+
 # Ignore Django Migrations in Development if you are working on team
 
 # Only for Development only
