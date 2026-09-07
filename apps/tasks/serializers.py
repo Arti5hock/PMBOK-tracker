@@ -54,92 +54,59 @@ class MilestoneSerializer(serializers.ModelSerializer):
             'tasks_count',
             'completed_tasks_count',
         ]
+        read_only_fields = ['id', 'tasks_count', 'completed_tasks_count']
 
     def get_completed_tasks_count(self, obj):
-        return obj.tasks.filter(status='done').count()
-
-    def validate(self, data):
-        new_status = data.get('status')
-        if new_status == Milestone.Status.ACHIEVED and self.instance:
-            if self.instance.tasks.exclude(status='done').exists():
-                raise serializers.ValidationError(
-                    {'status': 'Нельзя закрыть веху: не все связанные задачи завершены.'}
-                )
-        return data
+        return obj.tasks.filter(status=Task.Status.DONE).count()
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    wbs_code = serializers.ReadOnlyField()
-    
-    # Алиас для фронтенда: React ждет 'parent', а не 'parent_task'
-    parent = serializers.PrimaryKeyRelatedField(
-        source='parent_task', 
-        queryset=Task.objects.all(), 
-        required=False, 
-        allow_null=True
-    )
-    
-    # Динамический расчет прогресса
-    progress = serializers.SerializerMethodField()
+    """Сериализатор для задач с поддержкой WBS и декомпозиции"""
 
-    assignees = serializers.PrimaryKeyRelatedField(
-        many=True, queryset=User.objects.all(), required=False
-    )
-    assignees_detail = serializers.SerializerMethodField()
-    raci = TaskRaciMatrixSerializer(source='raci_assignments', many=True, read_only=True)
+    assignee_names = serializers.SerializerMethodField()
+    observer_names = serializers.SerializerMethodField()
+    parent_task_title = serializers.ReadOnlyField(source='parent_task.title')
+    milestone_title = serializers.ReadOnlyField(source='milestone.title')
+    wbs_code = serializers.ReadOnlyField()
+    raci_assignments = TaskRaciMatrixSerializer(many=True, read_only=True)
+    comments_count = serializers.IntegerField(source='comments.count', read_only=True)
+    attachments_count = serializers.IntegerField(source='attachments.count', read_only=True)
 
     class Meta:
         model = Task
         fields = [
             'id',
-            'wbs_code',
+            'project',
+            'parent_task',
+            'parent_task_title',
             'milestone',
+            'milestone_title',
+            'wbs_code',
             'title',
             'description',
             'type',
             'priority',
             'status',
-            'progress',      
-            'story_points',
-            'due_date',
-            'project',
             'assignees',
-            'assignees_detail',
-            'parent',        
-            'parent_task',   
+            'assignee_names',
+            'observers',
+            'observer_names',
+            'tags',
+            'due_date',
             'order',
             'created_at',
             'updated_at',
-            'raci'
+            'raci_assignments',
+            'comments_count',
+            'attachments_count',
         ]
         read_only_fields = ['id', 'wbs_code', 'created_at', 'updated_at']
 
-    def get_progress(self, obj):
-        # Если у задачи есть подзадачи, её прогресс рассчитывается на их основе
-        subtasks = obj.subtasks.all()
-        if subtasks.exists():
-            total = subtasks.count()
-            done = subtasks.filter(status='done').count()
-            return int((done / total) * 100)
-        
-        # Если это конечная задача (нет подзадач), смотрим на её собственный статус
-        if obj.status == 'done':
-            return 100
-        elif obj.status == 'in_progress':
-            return 50
-        return 0
+    def get_assignee_names(self, obj):
+        return [u.username for u in obj.assignees.all()]
 
-    def get_assignees_detail(self, obj):
-        from apps.accounts.serializers import UserSerializer
-        return UserSerializer(obj.assignees.all(), many=True).data
-
-    def validate(self, data):
-        due_date = data.get('due_date')
-        if due_date and due_date < timezone.now():
-            raise serializers.ValidationError(
-                {'due_date': 'Срок выполнения не может быть в прошлом.'}
-            )
-        return data
+    def get_observer_names(self, obj):
+        return [u.username for u in obj.observers.all()]
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -152,13 +119,12 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'task',
+            'text',
             'author',
             'author_name',
-            'text',
             'created_at',
             'updated_at',
         ]
-        # task и author отдаются из view/экшена автоматически
         read_only_fields = ['id', 'task', 'author', 'author_name', 'created_at', 'updated_at']
 
 
@@ -166,6 +132,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
     """Сериализатор для вложений"""
 
     uploaded_by_name = serializers.ReadOnlyField(source='uploaded_by.username')
+    file_size = serializers.SerializerMethodField()
+    file_extension = serializers.SerializerMethodField()
 
     class Meta:
         model = Attachment
@@ -177,5 +145,17 @@ class AttachmentSerializer(serializers.ModelSerializer):
             'uploaded_by',
             'uploaded_by_name',
             'uploaded_at',
+            'file_size',
+            'file_extension',
         ]
-        read_only_fields = ['id', 'uploaded_by', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_by', 'uploaded_at', 'file_size', 'file_extension']
+
+    def get_file_size(self, obj):
+        if obj.file and hasattr(obj.file, "size"):
+            return obj.file.size
+        return None
+
+    def get_file_extension(self, obj):
+        if obj.file and obj.file.name:
+            return obj.file.name.split(".")[-1].lower()
+        return None

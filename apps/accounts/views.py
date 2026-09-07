@@ -27,6 +27,7 @@ class RegisterView(generics.CreateAPIView):
             'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
 
+
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Получение, обновление и удаление данных пользователя"""
     queryset = User.objects.all()
@@ -34,6 +35,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
+        # SECURITY: Всегда возвращаем только текущего пользователя
         return self.request.user
         
     # Переопределяем метод удаления для проверки пароля
@@ -49,15 +51,6 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
                 {'current_password': ['Неверный пароль. Подтверждение не пройдено.']}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-class UserDetailView(generics.RetrieveUpdateAPIView):
-    """Получение и обновление данных пользователя"""
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_object(self):
-        return self.request.user
 
 class UserListView(generics.ListAPIView):
     """Получение списка всех пользователей для селекторов"""
