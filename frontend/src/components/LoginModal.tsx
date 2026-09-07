@@ -1,56 +1,77 @@
-import { useState, type FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { api } from '../api/client';
-import { Lock, User, UserPlus, LogIn } from 'lucide-react';
+import { Kanban, LogIn, UserPlus, AlertCircle } from 'lucide-react';
 
 interface LoginModalProps {
   onSuccess: () => void;
 }
 
 export const LoginModal = ({ onSuccess }: LoginModalProps) => {
-  const [isRegister, setIsRegister] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  // Для регистрации добавим имя (по желанию)
-  const [firstName, setFirstName] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState(''); // Новое поле для регистрации
   
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setLoading(true);
 
     try {
-      if (isRegister) {
-        // 1. Регистрируем пользователя
+      if (isLogin) {
+        // Логика ВХОДА (замени URL на тот, что у тебя работает для логина, 
+        // обычно это /auth/token/ или /auth/jwt/create/)
+        const res = await api.post('/token/', { 
+          username, 
+          password 
+        });
+        localStorage.setItem('access_token', res.data.access);
+        localStorage.setItem('refresh_token', res.data.refresh);
+        onSuccess();
+      } else {
+        // Логика РЕГИСТРАЦИИ
+        if (password !== passwordConfirm) {
+          setError('Пароли не совпадают. Проверь ввод.');
+          setLoading(false);
+          return;
+        }
+
+        // Отправляем расширенный payload (password2 нужен для твоего сериализатора)
         await api.post('/auth/register/', { 
           username, 
           password,
-          first_name: firstName 
+          password2: passwordConfirm // Djoser или твой кастомный сериализатор ждет это поле
         });
-        // 2. Сразу же логиним его (получаем токены)
-        const loginRes = await api.post('/token/', { username, password });
-        localStorage.setItem('access_token', loginRes.data.access);
-        localStorage.setItem('refresh_token', loginRes.data.refresh);
-        onSuccess();
-      } else {
-        // Обычный логин
-        const response = await api.post('/token/', { username, password });
-        localStorage.setItem('access_token', response.data.access);
-        localStorage.setItem('refresh_token', response.data.refresh);
-        onSuccess();
+        
+        // Если всё ок — переключаем на логин
+        setIsLogin(true);
+        setSuccessMsg('Регистрация прошла успешно! Теперь войди по этим данным.');
+        setPassword('');
+        setPasswordConfirm('');
       }
     } catch (err: any) {
-      if (isRegister) {
-        // Djoser отдает ошибки в виде объекта полей
-        const data = err.response?.data;
-        if (data?.username) setError(`Логин: ${data.username[0]}`);
-        else if (data?.password) setError(`Пароль: ${data.password[0]}`);
-        else setError('Ошибка при регистрации. Возможно, логин уже занят.');
+      console.error('Auth Error Payload:', err.response?.data);
+      
+      // Вытаскиваем и красиво форматируем ошибку от Django
+      if (err.response?.data) {
+        const data = err.response.data;
+        if (typeof data === 'object') {
+          // Превращаем объект {"username": ["Уже занят"], "password": ["Слишком короткий"]} в строку
+          const errorText = Object.entries(data)
+            .map(([key, value]) => `${key.toUpperCase()}: ${Array.isArray(value) ? value[0] : value}`)
+            .join(' | ');
+          setError(errorText || 'Ошибка валидации (400)');
+        } else {
+          setError('Внутренняя ошибка сервера');
+        }
       } else {
-        setError(err.response?.data?.detail || 'Неверный логин или пароль');
+        setError('Не удалось подключиться к серверу');
       }
     } finally {
       setLoading(false);
@@ -58,106 +79,100 @@ export const LoginModal = ({ onSuccess }: LoginModalProps) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-8 relative overflow-hidden">
+    <div className="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
         
-        {/* Декоративная полоса сверху */}
-        <div className={`absolute top-0 left-0 w-full h-1.5 ${isRegister ? 'bg-emerald-500' : 'bg-blue-600'}`} />
-
-        <div className="text-center mb-6 mt-2">
-          <h2 className="text-2xl font-bold text-slate-800">
-            {isRegister ? 'Регистрация' : 'Вход в PMBOK Tracker'}
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            {isRegister ? 'Создай аккаунт для работы с проектами' : 'Авторизуйся для продолжения работы'}
-          </p>
+        <div className="bg-blue-600 p-8 text-center">
+          <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+            <Kanban size={32} className="text-white" />
+          </div>
+          <h2 className="text-2xl font-black text-white tracking-tight">PMBOK Tracker</h2>
+          <p className="text-blue-100 text-sm mt-2 font-medium">Профессиональное управление</p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg text-center">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
-              Логин
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
-              <input
-                type="text"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
-                placeholder="Например: admin"
-              />
-            </div>
-          </div>
-
-          {isRegister && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
-                Имя (Опционально)
-              </label>
-              <div className="relative">
-                <UserPlus className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
-                  placeholder="Как к тебе обращаться?"
-                />
-              </div>
+        <div className="p-8">
+          {/* Блок вывода ошибок с бэкенда */}
+          {error && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2 text-rose-700 text-xs font-semibold">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
-              Пароль
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+          {/* Блок вывода успешной регистрации */}
+          {successMsg && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs font-semibold text-center">
+              {successMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Имя пользователя (Логин)</label>
               <input
-                type="password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
-                placeholder="••••••••"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                placeholder="Например: admin"
               />
             </div>
-          </div>
+            
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Пароль</label>
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                placeholder="Минимум 8 символов"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full mt-2 py-2.5 text-white font-medium rounded-lg shadow transition disabled:opacity-50 text-sm cursor-pointer flex justify-center items-center gap-2 ${
-              isRegister ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {loading ? 'Обработка...' : isRegister ? (
-              <><UserPlus size={18} /> Создать аккаунт</>
-            ) : (
-              <><LogIn size={18} /> Войти в систему</>
+            {/* Показываем подтверждение пароля только при регистрации */}
+            {!isLogin && (
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Подтвердите пароль</label>
+                <input
+                  required
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                  placeholder="Повторите пароль"
+                />
+              </div>
             )}
-          </button>
-        </form>
 
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setError(null);
-            }}
-            className="text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors"
-          >
-            {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2 mt-2 disabled:opacity-50"
+            >
+              {loading ? (
+                'Обработка...'
+              ) : isLogin ? (
+                <><LogIn size={18} /> Войти в систему</>
+              ) : (
+                <><UserPlus size={18} /> Создать аккаунт</>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+                setSuccessMsg(null);
+              }}
+              className="text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors"
+            >
+              {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войти'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -114,3 +114,11 @@ media/
 # **/migrations/**
 # !**/migrations
 # !**/migrations/__init__.py
+
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+.npm
+npm-debug.log
+yarn-error.log
