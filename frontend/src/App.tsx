@@ -113,7 +113,7 @@ export default function App() {
 
   const loadModuleSettings = async () => {
     try {
-      const res = await api.get('/accounts/me/');
+      const res = await api.get('/auth/me/');
       if (res.data.module_settings) {
         setModuleSettings(res.data.module_settings);
       }

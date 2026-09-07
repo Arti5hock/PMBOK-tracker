@@ -57,7 +57,7 @@ export const ModuleSettingsModal = ({ isOpen, onClose, onSuccess }: ModuleSettin
 
   const loadSettings = async () => {
     try {
-      const res = await api.get('/accounts/me/');
+      const res = await api.get('/auth/me/');
       if (res.data.module_settings) {
         setSettings(res.data.module_settings);
       }
@@ -69,7 +69,7 @@ export const ModuleSettingsModal = ({ isOpen, onClose, onSuccess }: ModuleSettin
   const handleSave = async () => {
     setLoading(true);
     try {
-      await api.put('/accounts/module-settings/', settings);
+      await api.put('/auth/module-settings/', settings);
       setSaved(true);
       setTimeout(() => {
         onSuccess?.();
