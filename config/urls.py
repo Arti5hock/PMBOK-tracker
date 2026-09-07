@@ -21,6 +21,7 @@ def home(request):
     """)
 
 
+# SECURITY: Ограничение доступа к Swagger/ReDoc только для авторизованных пользователей
 schema_view = get_schema_view(
     openapi.Info(
         title="Task Tracker API",
@@ -29,8 +30,8 @@ schema_view = get_schema_view(
         contact=openapi.Contact(email="support@tasktracker.com"),
         license=openapi.License(name="BSD License"),
     ),
-    public=True,
-    permission_classes=[permissions.AllowAny],
+    public=False,  # SECURITY: Отключить публичный доступ
+    permission_classes=[permissions.IsAuthenticated],  # SECURITY: Только для авторизованных
 )
 
 urlpatterns = [

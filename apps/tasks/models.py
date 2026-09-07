@@ -241,6 +241,10 @@ class Comment(models.Model):
 class Attachment(models.Model):
     """Вложения к задачам"""
     
+    # SECURITY: Разрешенные типы файлов для загрузки
+    ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'gif', 'txt', 'zip']
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    
     task = models.ForeignKey(
         Task,
         on_delete=models.CASCADE,
@@ -266,6 +270,19 @@ class Attachment(models.Model):
     
     def __str__(self):
         return self.filename
+    
+    def clean(self):
+        """SECURITY: Валидация загружаемых файлов"""
+        super().clean()
+        if self.file:
+            # Проверка размера файла
+            if self.file.size > self.MAX_FILE_SIZE:
+                raise ValidationError(f'Размер файла не должен превышать 10 MB')
+            
+            # Проверка расширения файла
+            ext = self.file.name.split('.')[-1].lower()
+            if ext not in self.ALLOWED_EXTENSIONS:
+                raise ValidationError(f'Недопустимый тип файла. Разрешены: {", ".join(self.ALLOWED_EXTENSIONS)}')
 
 
 class Tag(models.Model):
