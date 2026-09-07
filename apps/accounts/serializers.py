@@ -6,11 +6,23 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователя"""
+    module_settings = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'avatar']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'avatar', 'module_settings']
         read_only_fields = ['id']
+    
+    def get_module_settings(self, obj):
+        return obj.get_module_settings()
+
+
+class UserModuleSettingsSerializer(serializers.Serializer):
+    """Сериализатор для настроек модулей"""
+    kanban = serializers.BooleanField(required=False)
+    raci = serializers.BooleanField(required=False)
+    milestones = serializers.BooleanField(required=False)
+    risks = serializers.BooleanField(required=False)
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
