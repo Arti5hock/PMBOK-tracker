@@ -1,9 +1,10 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, UserRegisterSerializer
+from .serializers import UserSerializer, UserRegisterSerializer, UserModuleSettingsSerializer
 
 User = get_user_model()
 
@@ -51,6 +52,19 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
                 {'current_password': ['Неверный пароль. Подтверждение не пройдено.']}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_module_settings(request):
+    """Обновление настроек видимости модулей"""
+    serializer = UserModuleSettingsSerializer(data=request.data)
+    if serializer.is_valid():
+        user = request.user
+        updated_settings = user.update_module_settings(serializer.validated_data)
+        return Response({'module_settings': updated_settings})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserListView(generics.ListAPIView):
     """Получение списка всех пользователей для селекторов"""

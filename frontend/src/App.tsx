@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from './api/client';
-import { LogOut, Plus, Settings, Kanban, UserCircle, Bell } from 'lucide-react';
+import { LogOut, Plus, Settings, Kanban, UserCircle, Bell, HelpCircle, Settings2 } from 'lucide-react';
 
 // Компоненты
 import { LoginModal } from './components/LoginModal';
@@ -17,6 +17,8 @@ import { RiskModal } from './components/RiskModal';
 import { NotificationPanel } from './components/NotificationPanel';
 import { MilestonesList } from './components/MilestonesList';
 import { MilestoneModal } from './components/MilestoneModal';
+import { ModuleSettingsModal } from './components/ModuleSettingsModal';
+import { HelpModal } from './components/HelpModal';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -53,6 +55,16 @@ export default function App() {
   const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Состояния для настроек модулей и справки
+  const [isModuleSettingsOpen, setIsModuleSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [moduleSettings, setModuleSettings] = useState<{
+    kanban: boolean;
+    raci: boolean;
+    milestones: boolean;
+    risks: boolean;
+  }>({ kanban: true, raci: true, milestones: true, risks: true });
+
   const [wbsTasks, setWbsTasks] = useState([]);
 
   // Синхронизация стейтов с localStorage
@@ -87,9 +99,27 @@ export default function App() {
     }
   }, [selectedProjectId, currentView]);
 
+  // Загрузка настроек модулей при авторизации
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadModuleSettings();
+    }
+  }, [isAuthenticated]);
+
   const checkAuth = () => {
     const token = localStorage.getItem('access_token');
     setIsAuthenticated(!!token);
+  };
+
+  const loadModuleSettings = async () => {
+    try {
+      const res = await api.get('/accounts/me/');
+      if (res.data.module_settings) {
+        setModuleSettings(res.data.module_settings);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки настроек модулей', error);
+    }
   };
 
   const handleLogout = () => {
@@ -254,43 +284,71 @@ export default function App() {
           <>
             {/* ТАБЫ НАВИГАЦИИ ПРОЕКТА */}
             <div className="mb-6 border-b border-slate-200">
-              <div className="flex space-x-6">
-                <button
-                  onClick={() => setCurrentView('kanban')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'kanban' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Канбан-доска
-                </button>
-                <button
-                  onClick={() => setCurrentView('milestones')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'milestones' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Вехи проекта
-                </button>
-                <button
-                  onClick={() => setCurrentView('wbs')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'wbs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Структура WBS
-                </button>
-                <button
-                  onClick={() => setCurrentView('raci')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'raci' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Матрица RACI
-                </button>
-                <button
-                  onClick={() => setCurrentView('risks')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'risks' ? 'border-rose-600 text-rose-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Реестр рисков
-                </button>
-                <button
-                  onClick={() => setCurrentView('my_tasks')}
-                  className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'my_tasks' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                >
-                  Мои задачи
-                </button>
+              <div className="flex items-center justify-between">
+                <div className="flex space-x-6">
+                  {moduleSettings.kanban && (
+                    <button
+                      onClick={() => setCurrentView('kanban')}
+                      className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'kanban' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Канбан-доска
+                    </button>
+                  )}
+                  {moduleSettings.milestones && (
+                    <button
+                      onClick={() => setCurrentView('milestones')}
+                      className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'milestones' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Вехи проекта
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setCurrentView('wbs')}
+                    className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'wbs' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Структура WBS
+                  </button>
+                  {moduleSettings.raci && (
+                    <button
+                      onClick={() => setCurrentView('raci')}
+                      className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'raci' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Матрица RACI
+                    </button>
+                  )}
+                  {moduleSettings.risks && (
+                    <button
+                      onClick={() => setCurrentView('risks')}
+                      className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'risks' ? 'border-rose-600 text-rose-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Реестр рисков
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setCurrentView('my_tasks')}
+                    className={`py-3 text-sm font-semibold border-b-2 transition-colors ${currentView === 'my_tasks' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Мои задачи
+                  </button>
+                </div>
+
+                {/* Кнопки настроек модулей и справки */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsModuleSettingsOpen(true)}
+                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition"
+                    title="Настройка модулей"
+                  >
+                    <Settings2 size={18} />
+                  </button>
+                  <button
+                    onClick={() => setIsHelpOpen(true)}
+                    className="p-2 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition"
+                    title="Справка"
+                  >
+                    <HelpCircle size={18} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -426,6 +484,21 @@ export default function App() {
         }}
         projectId={selectedProjectId || 0}
         milestone={editingMilestone}
+      />
+
+      {/* МОДАЛКА НАСТРОЙКИ МОДУЛЕЙ */}
+      <ModuleSettingsModal
+        isOpen={isModuleSettingsOpen}
+        onClose={() => setIsModuleSettingsOpen(false)}
+        onSuccess={() => {
+          loadModuleSettings();
+        }}
+      />
+
+      {/* МОДАЛКА СПРАВКИ */}
+      <HelpModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
       />
     </div>
   );
