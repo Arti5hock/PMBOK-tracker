@@ -5,11 +5,14 @@ from pathlib import Path
 # Базовые настройки
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-@8v7!9x2$#p5q&w3e4r6t7y8u9i0o1p2a3s4d5f6g7h8j9k0l1z2x3c4v5b6n7m8'
+# SECURITY: SECRET_KEY должен храниться в переменной окружения
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production-@8v7!9x2$#p5q&w3e4r6t7y8u9i0o1p2a3s4d5f6g7h8j9k0l1z2x3c4v5b6n7m8')
 
-DEBUG = True
+# SECURITY: DEBUG должен быть False в production
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
+# SECURITY: Ограничьте ALLOWED_HOSTS в production
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Приложения
 INSTALLED_APPS = [
@@ -140,12 +143,12 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-# Настройки JWT
+# SECURITY: Уменьшенное время жизни JWT токенов для production
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  # 30 минут вместо 1 дня
+    'REFRESH_TOKEN_LIFETIME': timedelta(hours=6),     # 6 часов вместо 7 дней
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,  # Включить blacklist для отозванных токенов
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
@@ -166,8 +169,12 @@ SWAGGER_SETTINGS = {
     'REFETCH_SCHEMA_ON_LOGOUT': True,
 }
 
-# CORS
-CORS_ALLOW_ALL_ORIGINS = True
+# SECURITY: Настройки CORS для production
+# Разрешите только конкретные origin в production
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000'
+).split(',')
 CORS_ALLOW_CREDENTIALS = True
 
 # ==========================================

@@ -1,9 +1,10 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, UserRegisterSerializer
+from .serializers import UserSerializer, UserRegisterSerializer, UserModuleSettingsSerializer
 
 User = get_user_model()
 
@@ -27,6 +28,7 @@ class RegisterView(generics.CreateAPIView):
             'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
 
+
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Получение, обновление и удаление данных пользователя"""
     queryset = User.objects.all()
@@ -34,6 +36,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get_object(self):
+        # SECURITY: Всегда возвращаем только текущего пользователя
         return self.request.user
         
     # Переопределяем метод удаления для проверки пароля
@@ -50,14 +53,18 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-class UserDetailView(generics.RetrieveUpdateAPIView):
-    """Получение и обновление данных пользователя"""
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_object(self):
-        return self.request.user
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_module_settings(request):
+    """Обновление настроек видимости модулей"""
+    serializer = UserModuleSettingsSerializer(data=request.data)
+    if serializer.is_valid():
+        user = request.user
+        updated_settings = user.update_module_settings(serializer.validated_data)
+        return Response({'module_settings': updated_settings})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserListView(generics.ListAPIView):
     """Получение списка всех пользователей для селекторов"""

@@ -1,106 +1,44 @@
+```
+# Dependencies
+node_modules/
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
+# Build artifacts
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
+build/
 target/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.ENV.local
+.env
+.env.local
+.env.
 .python-version
 
-# celery beat schedule file
-celerybeat-schedule
+# Logs
+*.log
 
-# SageMath parsed files
-*.sage.py
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
-# dotenv
-.env
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
 
-# virtualenv
-.venv
-venv/
-ENV/
-.vscode
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-
+# OS
 .DS_Store
 *.sqlite3
 media/
@@ -114,11 +52,3 @@ media/
 # **/migrations/**
 # !**/migrations
 # !**/migrations/__init__.py
-
-# Node & Frontend
-node_modules/
-frontend/dist/
-frontend/build/
-.npm
-npm-debug.log
-yarn-error.log
