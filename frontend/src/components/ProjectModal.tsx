@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
-import { X, Users, FolderKanban } from 'lucide-react';
+import { X, Users, FolderKanban, Search, UserPlus, Crown } from 'lucide-react';
 
 interface UserItem {
     id: number;
@@ -8,6 +8,11 @@ interface UserItem {
     first_name?: string;
     last_name?: string;
 }
+
+const userLabel = (u: UserItem) => {
+    const full = `${u.first_name || ''} ${u.last_name || ''}`.trim();
+    return full ? `${full} (${u.username})` : u.username;
+};
 
 interface ProjectModalProps {
     isOpen: boolean;
@@ -28,12 +33,17 @@ export function ProjectModal({ isOpen, onClose, onSuccess, project }: ProjectMod
     const [members, setMembers] = useState<number[]>([]);
 
     // Данные для селекторов
-    const [allUsers, setAllUsers] = useState<UserItem[]>([]);
     const [loading, setLoading] = useState(false);
+
+    // Поиск участников
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<UserItem[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [memberDetails, setMemberDetails] = useState<UserItem[]>([]);
+    const searchSeq = useRef(0);
 
     useEffect(() => {
         if (isOpen) {
-            fetchUsers();
             if (project) {
                 setName(project.name || '');
                 setDescription(project.description || '');
@@ -45,6 +55,7 @@ export function ProjectModal({ isOpen, onClose, onSuccess, project }: ProjectMod
                 setStartDate(project.start_date || '');
                 setEndDate(project.end_date || '');
                 setMembers(project.members || []);
+                setMemberDetails([]);
             } else {
                 setName('');
                 setDescription('');
@@ -52,20 +63,77 @@ export function ProjectModal({ isOpen, onClose, onSuccess, project }: ProjectMod
                 setStartDate('');
                 setEndDate('');
                 setMembers([]);
+                setMemberDetails([]);
             }
+            setSearchQuery('');
+            setSearchResults([]);
             setActiveTab('settings');
         }
     }, [project, isOpen]);
 
+    // Догружаем подписи для уже добавленных участников: сериализатор проекта
+    // отдаёт только их id, а показать надо имя и username.
+    useEffect(() => {
+        if (!isOpen || !members.length) return;
+        const missing = members.filter(id => !memberDetails.some(m => m.id === id));
+        if (!missing.length) return;
 
-    const fetchUsers = async () => {
-        try {
-            const res = await api.get('/auth/users/');
-            setAllUsers(res.data.results || res.data);
-        } catch (e) {
-            console.error('Ошибка загрузки пользователей', e);
+        const controller = new AbortController();
+        api.get('/auth/users/', { signal: controller.signal })
+            .then(res => {
+                const list: UserItem[] = res.data.results || res.data;
+                setMemberDetails(prev => {
+                    const known = new Set(prev.map(u => u.id));
+                    return [...prev, ...list.filter(u => !known.has(u.id))];
+                });
+            })
+            .catch(() => undefined);
+
+        return () => controller.abort();
+    }, [isOpen, members, memberDetails]);
+
+    // Поиск и правка команды доступны только владельцу проекта. Для нового
+    // проекта владельцем станет текущий пользователь, поэтому ограничений нет.
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        api.get('/auth/me/')
+            .then(res => setCurrentUserId(res.data.id ?? null))
+            .catch(() => setCurrentUserId(null));
+    }, [isOpen]);
+
+    const canManageTeam = !project || (currentUserId !== null && project.owner === currentUserId);
+
+    // Поиск пользователей с дебаунсом
+    useEffect(() => {
+        const query = searchQuery.trim();
+        if (query.length < 2) {
+            setSearchResults([]);
+            setSearching(false);
+            return;
         }
-    };
+
+        const seq = ++searchSeq.current;
+        setSearching(true);
+        const timer = setTimeout(() => {
+            api.get(`/auth/users/search/?search=${encodeURIComponent(query)}${project ? `&project=${project.id}` : ''}`)
+                .then(res => {
+                    if (seq !== searchSeq.current) return;
+                    setSearchResults(res.data.results || res.data);
+                })
+                .catch(() => {
+                    if (seq !== searchSeq.current) return;
+                    setSearchResults([]);
+                })
+                .finally(() => {
+                    if (seq === searchSeq.current) setSearching(false);
+                });
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, project]);
+
 
     const handleDelete = async () => {
         if (!project) return;
@@ -122,10 +190,15 @@ export function ProjectModal({ isOpen, onClose, onSuccess, project }: ProjectMod
         }
     };
 
-    const toggleMember = (userId: number) => {
-        setMembers(prev =>
-            prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-        );
+    const addMember = (user: UserItem) => {
+        setMembers(prev => (prev.includes(user.id) ? prev : [...prev, user.id]));
+        setMemberDetails(prev => (prev.some(u => u.id === user.id) ? prev : [...prev, user]));
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
+    const removeMember = (userId: number) => {
+        setMembers(prev => prev.filter(id => id !== userId));
     };
 
     if (!isOpen) return null;
@@ -227,28 +300,84 @@ export function ProjectModal({ isOpen, onClose, onSuccess, project }: ProjectMod
                     )}
 
                     {activeTab === 'team' && (
-                        <div className="space-y-2">
-                            <p className="text-xs text-slate-500 mb-4">
-                                Отметьте сотрудников, которые будут иметь доступ к задачам и доскам этого проекта. Вы (как создатель) добавляетесь автоматически.
+                        <div className="space-y-4">
+                            <p className="text-xs text-slate-500">
+                                {canManageTeam
+                                    ? 'Найдите сотрудника по username, имени или фамилии и добавьте его в команду проекта. Участники получают доступ к задачам, доскам и вехам проекта.'
+                                    : 'Состав команды может менять только владелец проекта. Здесь виден текущий состав.'}
                             </p>
-                            <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                                {allUsers.length === 0 ? (
-                                    <p className="p-4 text-center text-sm text-slate-400">Нет доступных пользователей</p>
-                                ) : (
-                                    allUsers.map(user => (
-                                        <label key={user.id} className="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={members.includes(user.id)}
-                                                onChange={() => toggleMember(user.id)}
-                                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                                            />
-                                            <span className="text-sm font-medium text-slate-800">
-                                                {user.first_name ? `${user.first_name} (${user.username})` : user.username}
-                                            </span>
-                                        </label>
-                                    ))
-                                )}
+
+                            {/* Поиск */}
+                            {canManageTeam && (
+                            <div className="relative">
+                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Введите минимум 2 символа..."
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            )}
+
+                            {/* Результаты поиска */}
+                            {canManageTeam && searchQuery.trim().length >= 2 && (
+                                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-44 overflow-y-auto">
+                                    {searching ? (
+                                        <p className="p-3 text-center text-xs text-slate-400">Поиск...</p>
+                                    ) : searchResults.length === 0 ? (
+                                        <p className="p-3 text-center text-xs text-slate-400">Ничего не найдено</p>
+                                    ) : (
+                                        searchResults.map(user => (
+                                            <button
+                                                key={user.id}
+                                                type="button"
+                                                onClick={() => addMember(user)}
+                                                className="w-full flex items-center justify-between gap-3 p-3 hover:bg-blue-50 transition-colors text-left"
+                                            >
+                                                <span className="text-sm font-medium text-slate-800">{userLabel(user)}</span>
+                                                <UserPlus size={16} className="text-blue-600 shrink-0" />
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Текущий состав */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">
+                                    В команде ({members.length})
+                                </h4>
+                                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                                    {members.length === 0 ? (
+                                        <p className="p-4 text-center text-sm text-slate-400">Команда пока пуста</p>
+                                    ) : (
+                                        members.map(id => {
+                                            const user = memberDetails.find(u => u.id === id);
+                                            const isProjectOwner = project?.owner === id;
+                                            return (
+                                                <div key={id} className="flex items-center justify-between gap-3 p-3">
+                                                    <span className="flex items-center gap-2 text-sm font-medium text-slate-800 min-w-0">
+                                                        {isProjectOwner && <Crown size={14} className="text-amber-500 shrink-0" />}
+                                                        <span className="truncate">
+                                                            {user ? userLabel(user) : `Пользователь #${id}`}
+                                                        </span>
+                                                    </span>
+                                                    {!isProjectOwner && canManageTeam && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeMember(id)}
+                                                            className="text-xs font-medium text-rose-600 hover:bg-rose-50 px-2 py-1 rounded transition shrink-0"
+                                                        >
+                                                            Убрать
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

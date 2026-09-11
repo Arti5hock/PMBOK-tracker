@@ -82,11 +82,50 @@ class UserListView(generics.ListAPIView):
         user = self.request.user
         # Владельцы и участники проектов, где состоит текущий пользователь, плюс он сам —
         # но не весь список пользователей системы.
-        return User.objects.filter(
+        queryset = User.objects.filter(
             Q(owned_projects__owner=user)
             | Q(owned_projects__members=user)
             | Q(assigned_projects__owner=user)
             | Q(assigned_projects__members=user)
             | Q(pk=user.pk)
         ).distinct()
+
+        search = self.request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+        return queryset.order_by('username')
+
+
+class UserSearchView(generics.ListAPIView):
+    """Поиск по всем пользователям системы — чтобы добавить их в проект.
+
+    Отдаёт только публичные поля (id, username, имя, фамилия), без email и
+    телефона. Требует минимум 2 символа в ?search= и исключает тех, кто уже
+    состоит в проекте из ?project=, чтобы фронтенд не показывал их повторно.
+    """
+    serializer_class = UserPublicSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        search = self.request.query_params.get('search', '').strip()
+        if len(search) < 2:
+            return User.objects.none()
+
+        queryset = User.objects.filter(
+            Q(username__icontains=search)
+            | Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+        )
+
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            queryset = queryset.exclude(
+                Q(owned_projects__pk=project_id) | Q(assigned_projects__pk=project_id)
+            )
+
+        return queryset.exclude(pk=self.request.user.pk).order_by('username')[:20]
     

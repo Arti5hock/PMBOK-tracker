@@ -1,5 +1,6 @@
 from django.db.models import Q
 from rest_framework import viewsets, permissions, filters
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Project
@@ -32,3 +33,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        # Менять состав команды может только владелец: иначе участник способен
+        # исключить другого участника или добавить постороннего.
+        if 'members' in serializer.validated_data and self.get_object().owner != self.request.user:
+            raise PermissionDenied('Менять состав участников проекта может только его владелец.')
+        serializer.save()
