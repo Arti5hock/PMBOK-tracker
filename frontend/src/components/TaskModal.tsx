@@ -481,8 +481,13 @@ export function TaskModal({ isOpen, onClose, onSuccess, projectId, task, default
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              {activeSection === 'details' && (
-                <form id="task-form" onSubmit={handleSave} className="space-y-4">
+              {/* Форма всегда в DOM: кнопка "Сохранить" в футере привязана к ней
+                  через form="task-form" и не найдёт её, если вкладка не "Параметры". */}
+              <form
+                id="task-form"
+                onSubmit={handleSave}
+                className={activeSection === 'details' ? 'space-y-4' : 'hidden'}
+              >
                   <div>
                     <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Название задачи</label>
                     <input required type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -546,8 +551,7 @@ export function TaskModal({ isOpen, onClose, onSuccess, projectId, task, default
                       <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 text-slate-700" />
                     </div>
                   </div>
-                </form>
-              )}
+              </form>
 
               {activeSection === 'raci' && ( 
                 <div className="space-y-4">
