@@ -7,14 +7,22 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователя"""
     module_settings = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'avatar', 'module_settings']
         read_only_fields = ['id']
-    
+
     def get_module_settings(self, obj):
         return obj.get_module_settings()
+
+
+class UserPublicSerializer(serializers.ModelSerializer):
+    """Публичный сериализатор: без email/phone — для селекторов исполнителей"""
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name']
 
 
 class UserModuleSettingsSerializer(serializers.Serializer):

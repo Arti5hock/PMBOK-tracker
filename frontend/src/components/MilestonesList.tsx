@@ -5,7 +5,7 @@ import { Flag, Plus, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 interface MilestonesListProps {
   projectId: number;
   onOpenModal: (milestone?: any) => void;
-  refreshTrigger?: boolean;
+  refreshTrigger?: number;
 }
 
 export const MilestonesList = ({ projectId, onOpenModal, refreshTrigger }: MilestonesListProps) => {

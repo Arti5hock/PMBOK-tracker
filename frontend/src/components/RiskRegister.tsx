@@ -5,9 +5,10 @@ import { ShieldAlert, Plus, Activity, AlertTriangle } from 'lucide-react';
 interface RiskRegisterProps {
   projectId: number;
   onOpenRiskModal: (risk?: any) => void;
+  refreshTrigger?: number;
 }
 
-export const RiskRegister = ({ projectId, onOpenRiskModal }: RiskRegisterProps) => {
+export const RiskRegister = ({ projectId, onOpenRiskModal, refreshTrigger }: RiskRegisterProps) => {
   const [risks, setRisks] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,7 @@ export const RiskRegister = ({ projectId, onOpenRiskModal }: RiskRegisterProps) 
 
   useEffect(() => {
     if (projectId) fetchRisksData();
-  }, [projectId]);
+  }, [projectId, refreshTrigger]);
 
   if (loading) return <div className="p-8 text-center text-slate-500">Анализ реестра рисков...</div>;
 

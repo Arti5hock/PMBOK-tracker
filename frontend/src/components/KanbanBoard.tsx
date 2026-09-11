@@ -73,26 +73,37 @@ export default function KanbanBoard({ projectId }: { projectId: number }) {
     if (!draggedTaskId || !draggedFromColumn || draggedFromColumn === targetColumnType) return;
     if (!board) return;
 
-    const newBoard = { ...board };
-    const sourceColIndex = newBoard.columns.findIndex(c => c.type === draggedFromColumn);
-    const targetColIndex = newBoard.columns.findIndex(c => c.type === targetColumnType);
+    const taskId = draggedTaskId;
 
-    const taskToMove = newBoard.columns[sourceColIndex].tasks.find(t => t.id === draggedTaskId);
-    
-    if (taskToMove) {
-      newBoard.columns[sourceColIndex].tasks = newBoard.columns[sourceColIndex].tasks.filter(t => t.id !== draggedTaskId);
-      newBoard.columns[targetColIndex].tasks.push(taskToMove);
-      setBoard(newBoard);
-    }
+    // Иммутабельно обновляем доску: копируем и массив колонок, и сами колонки,
+    // иначе React не увидит изменений, а откат при ошибке будет некорректным.
+    const newColumns = board.columns.map((column) => {
+      if (column.type === draggedFromColumn) {
+        return { ...column, tasks: column.tasks.filter((t) => t.id !== taskId) };
+      }
+      if (column.type === targetColumnType) {
+        const taskToMove = board.columns
+          .find((c) => c.type === draggedFromColumn)!
+          .tasks.find((t) => t.id === taskId);
+        return taskToMove
+          ? { ...column, tasks: [...column.tasks, { ...taskToMove, status: targetColumnType }] }
+          : column;
+      }
+      return column;
+    });
+    const previousBoard = board;
+    setBoard({ ...board, columns: newColumns });
 
     try {
       await api.post(`/kanban/boards/${board.id}/move_task/`, {
-        task_id: draggedTaskId,
+        task_id: taskId,
         status: targetColumnType,
       });
+      // Пересинхронизируем с сервером (пересчёт WIP-счётчиков и порядка)
+      fetchBoard();
     } catch (error: any) {
+      setBoard(previousBoard);
       alert(error.response?.data?.error || 'Не удалось переместить задачу');
-      fetchBoard(); 
     } finally {
       setDraggedTaskId(null);
       setDraggedFromColumn(null);

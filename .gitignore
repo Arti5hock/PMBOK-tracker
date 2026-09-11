@@ -51,6 +51,14 @@ media/
 db.sqlite3
 .env
 
+# Состояние Celery beat (бинарь, создаётся при запуске)
+celerybeat-schedule
+celerybeat-schedule.*
+
+# Собранная статика и логи
+static/
+logs/
+
 # Никаких библиотек и файлов юзеров
 node_modules/
 frontend/node_modules/

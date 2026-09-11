@@ -65,7 +65,13 @@ export default function App() {
     risks: boolean;
   }>({ kanban: true, raci: true, milestones: true, risks: true });
 
-  const [wbsTasks, setWbsTasks] = useState([]);
+  const [wbsTasks, setWbsTasks] = useState<any[]>([]);
+
+  // Счётчик изменений: инкрементируется после сохранения/удаления сущностей,
+  // чтобы зависимые списки перезагружали данные именно по факту изменения.
+  const [dataVersion, setDataVersion] = useState(0);
+
+  const invalidateData = () => setDataVersion((v) => v + 1);
 
   // Синхронизация стейтов с localStorage
   useEffect(() => {
@@ -97,7 +103,7 @@ export default function App() {
     if (selectedProjectId && currentView === 'wbs') {
       loadWbs();
     }
-  }, [selectedProjectId, currentView]);
+  }, [selectedProjectId, currentView, dataVersion]);
 
   // Загрузка настроек модулей при авторизации
   useEffect(() => {
@@ -170,8 +176,6 @@ export default function App() {
   if (!isAuthenticated) {
     return <LoginModal onSuccess={checkAuth} />;
   }
-
-  const refreshCounter = isTaskModalOpen || isRiskModalOpen;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -277,7 +281,7 @@ export default function App() {
                 setEditingTask(task);
                 setIsTaskModalOpen(true);
               }}
-              refreshTrigger={!!refreshCounter}
+              refreshTrigger={dataVersion}
             />
           </div>
         ) : (
@@ -359,7 +363,7 @@ export default function App() {
               {currentView === 'milestones' && (
                 <MilestonesList
                   projectId={selectedProjectId}
-                  refreshTrigger={isMilestoneModalOpen}
+                  refreshTrigger={dataVersion}
                   onOpenModal={(milestone) => {
                     setEditingMilestone(milestone || null);
                     setIsMilestoneModalOpen(true);
@@ -404,6 +408,7 @@ export default function App() {
               {currentView === 'risks' && (
                 <RiskRegister
                   projectId={selectedProjectId}
+                  refreshTrigger={dataVersion}
                   onOpenRiskModal={(risk) => {
                     setEditingRisk(risk || null);
                     setIsRiskModalOpen(true);
@@ -414,7 +419,7 @@ export default function App() {
               {currentView === 'my_tasks' && (
                 <MyTasks
                   projectId={selectedProjectId}
-                  refreshTrigger={!!refreshCounter}
+                  refreshTrigger={dataVersion}
                   onOpenTask={(task) => {
                     setActiveParentId(null);
                     setEditingTask(task);
@@ -443,7 +448,7 @@ export default function App() {
         isOpen={isTaskModalOpen}
         onClose={() => setIsTaskModalOpen(false)}
         onSuccess={() => {
-          if (currentView === 'wbs') loadWbs();
+          invalidateData();
         }}
         projectId={selectedProjectId || 0}
         task={editingTask}
@@ -459,7 +464,10 @@ export default function App() {
       <RiskModal
         isOpen={isRiskModalOpen}
         onClose={() => setIsRiskModalOpen(false)}
-        onSuccess={() => setCurrentView('risks')}
+        onSuccess={() => {
+          setCurrentView('risks');
+          invalidateData();
+        }}
         projectId={selectedProjectId || 0}
         risk={editingRisk}
       />

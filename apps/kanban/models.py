@@ -29,16 +29,20 @@ class KanbanColumn(models.Model):
         ordering = ['order']
         unique_together = ['project', 'type']
 
-    def is_wip_limit_reached(self):
-        # Метод для проверки WIP лимита (используется во вьюхах)
+    def is_wip_limit_reached(self, exclude_task_id=None):
+        """Достигнут ли WIP-лимит колонки.
+
+        exclude_task_id исключает перемещаемую задачу из подсчёта, иначе задача,
+        уже находящаяся в этой колонке, считалась бы дважды.
+        """
         if self.wip_limit is None:
             return False
         from apps.tasks.models import Task
 
-        return (
-            Task.objects.filter(project=self.project, status=self.type).count()
-            >= self.wip_limit
-        )
+        tasks = Task.objects.filter(project=self.project, status=self.type)
+        if exclude_task_id is not None:
+            tasks = tasks.exclude(pk=exclude_task_id)
+        return tasks.count() >= self.wip_limit
 
     def __str__(self):
         return f'{self.project.name} - {self.name}'

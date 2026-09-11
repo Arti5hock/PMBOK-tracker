@@ -125,7 +125,7 @@ class CommentSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'task', 'author', 'author_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'author', 'author_name', 'created_at', 'updated_at']
 
 
 class AttachmentSerializer(serializers.ModelSerializer):

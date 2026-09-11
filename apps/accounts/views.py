@@ -1,10 +1,17 @@
+from django.db.models import Q
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view, permission_classes
 from django.contrib.auth import get_user_model
 from django.contrib.auth import authenticate
-from .serializers import UserSerializer, UserRegisterSerializer, UserModuleSettingsSerializer
+
+from .serializers import (
+    UserPublicSerializer,
+    UserSerializer,
+    UserRegisterSerializer,
+    UserModuleSettingsSerializer,
+)
 
 User = get_user_model()
 
@@ -67,8 +74,19 @@ def update_module_settings(request):
 
 
 class UserListView(generics.ListAPIView):
-    """Получение списка всех пользователей для селекторов"""
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+    """Список пользователей для селекторов: только те, с кем есть общие проекты"""
+    serializer_class = UserPublicSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Владельцы и участники проектов, где состоит текущий пользователь, плюс он сам —
+        # но не весь список пользователей системы.
+        return User.objects.filter(
+            Q(owned_projects__owner=user)
+            | Q(owned_projects__members=user)
+            | Q(assigned_projects__owner=user)
+            | Q(assigned_projects__members=user)
+            | Q(pk=user.pk)
+        ).distinct()
     

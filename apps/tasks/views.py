@@ -1,11 +1,17 @@
+from collections import defaultdict
+
 from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import filters, permissions, status, viewsets
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
+from rest_framework import filters, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.common.permissions import user_project_filter
 from .models import Attachment, Comment, Milestone, Tag, Task, TaskRaciMatrix
 from .serializers import (
     AttachmentSerializer,
@@ -13,8 +19,16 @@ from .serializers import (
     TagSerializer,
     TaskRaciMatrixSerializer,
     TaskSerializer,
-    MilestoneSerializer
+    MilestoneSerializer,
 )
+
+
+class ChangeStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=Task.Status.choices,
+        help_text='Новый статус задачи',
+    )
+
 
 class TaskRaciMatrixViewSet(viewsets.ModelViewSet):
     """API управления ролями RACI матрицы проекта"""
@@ -32,18 +46,21 @@ class TaskRaciMatrixViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return TaskRaciMatrix.objects.none()
 
-        return TaskRaciMatrix.objects.filter(task__project__owner=user)
+        return TaskRaciMatrix.objects.filter(
+            user_project_filter(user, 'task__project')
+        ).distinct()
 
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                'project',
-                openapi.IN_QUERY,
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='project',
+                type=int,
+                location=OpenApiParameter.QUERY,
                 description="ID проекта для построения сводной матрицы RACI",
-                type=openapi.TYPE_INTEGER,
                 required=True,
             )
-        ]
+        ],
+        responses={200: TaskRaciMatrixSerializer(many=True)},
     )
     @action(detail=False, methods=['get'])
     def project_matrix(self, request):
@@ -52,7 +69,13 @@ class TaskRaciMatrixViewSet(viewsets.ModelViewSet):
         if not project_id:
             return Response({'error': 'Параметр query project обязателен'}, status=400)
 
-        tasks = Task.objects.filter(project_id=project_id, project__owner=request.user).exclude(status='done')
+        tasks = (
+            Task.objects.filter(
+                user_project_filter(request.user) & Q(project_id=project_id)
+            )
+            .exclude(status='done')
+            .distinct()
+        )
         result = []
         for task in tasks:
             assignments = task.raci_assignments.all().select_related('user')
@@ -83,7 +106,8 @@ class MilestoneViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_authenticated:
             return Milestone.objects.none()
-        return Milestone.objects.filter(project__owner=user)
+        return Milestone.objects.filter(user_project_filter(user)).distinct()
+
 
 class TaskViewSet(viewsets.ModelViewSet):
     """API для управления задачами"""
@@ -109,10 +133,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Task.objects.none()
 
-        # Правильное объединение условий через Q без конфликтов unique query
         return (
             Task.objects.filter(
-                Q(project__owner=user)
+                user_project_filter(user)
                 | Q(assignees=user)
                 | Q(observers=user)
             )
@@ -122,22 +145,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save()
 
-    @swagger_auto_schema(
-        operation_description="Изменить статус задачи",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['status'],
-            properties={
-                'status': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description="Новый статус задачи (например: backlog, todo, in_progress, review, done)"
-                ),
-            },
-        ),
-        responses={
-            200: TaskSerializer,
-            400: "Неверный статус или статус не указан",
-        },
+    @extend_schema(
+        summary="Изменить статус задачи",
+        request=ChangeStatusSerializer,
+        responses={200: TaskSerializer},
     )
     @action(detail=True, methods=['post'])
     def change_status(self, request, pk=None):
@@ -162,13 +173,10 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         return Response(TaskSerializer(task).data)
 
-    @swagger_auto_schema(
-        operation_description="Добавить комментарий к задаче",
-        request_body=CommentSerializer,
-        responses={
-            201: CommentSerializer,
-            400: "Ошибка валидации",
-        },
+    @extend_schema(
+        summary="Добавить комментарий к задаче",
+        request=CommentSerializer,
+        responses={201: CommentSerializer},
     )
     @action(detail=True, methods=['post'])
     def add_comment(self, request, pk=None):
@@ -178,16 +186,18 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(author=request.user, task=task)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                'project',
-                openapi.IN_QUERY,
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name='project',
+                type=int,
+                location=OpenApiParameter.QUERY,
                 description="ID проекта для построения дерева WBS",
-                type=openapi.TYPE_INTEGER,
                 required=True,
             )
-        ]
+        ],
+        responses={200: OpenApiResponse(description="Иерархическое дерево WBS")},
     )
     @action(detail=False, methods=['get'])
     def wbs_tree(self, request):
@@ -198,23 +208,35 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         tasks = (
             Task.objects.filter(
-                Q(project_id=project_id) &
-                (Q(project__owner=request.user) | Q(project__members=request.user))
+                user_project_filter(request.user) & Q(project_id=project_id)
             )
             .select_related('milestone', 'parent_task')
             .order_by('order', 'id')
             .distinct()
         )
 
+        # Группируем подзадачи один раз, чтобы не сканировать весь список на каждом узле
+        children_by_parent = defaultdict(list)
+        for task in tasks:
+            children_by_parent[task.parent_task_id].append(task)
+
+        # WBS-коды считаем одним проходом сверху вниз и кэшируем на объектах,
+        # иначе свойство task.wbs_code поднимается по цепочке parent_task (N+1).
+        def assign_wbs_codes(task, parent_code):
+            segment = str(task.order if task.order else task.id)
+            task.wbs_code_cached = f'{parent_code}.{segment}' if parent_code else segment
+            for child in children_by_parent[task.id]:
+                assign_wbs_codes(child, task.wbs_code_cached)
+
         def build_node(task):
-            subtasks = [t for t in tasks if t.parent_task_id == task.id]
+            subtasks = children_by_parent[task.id]
             total = len(subtasks)
             done = sum(1 for t in subtasks if t.status == Task.Status.DONE)
             progress = round((done / total) * 100) if total > 0 else (100 if task.status == Task.Status.DONE else 0)
 
             return {
                 'id': task.id,
-                'wbs_code': task.wbs_code,
+                'wbs_code': task.wbs_code_cached,
                 'title': task.title,
                 'status': task.status,
                 'milestone': task.milestone.title if task.milestone else None,
@@ -223,16 +245,17 @@ class TaskViewSet(viewsets.ModelViewSet):
             }
 
         # Корневые элементы WBS (задачи без parent_task)
-        root_tasks = [t for t in tasks if t.parent_task_id is None]
-        tree = [build_node(root) for root in root_tasks]
+        root_tasks = children_by_parent[None]
 
-        return Response(tree)
+        for root in root_tasks:
+            assign_wbs_codes(root, '')
+
+        return Response([build_node(root) for root in root_tasks])
 
 
 class CommentViewSet(viewsets.ModelViewSet):
     """API для управления комментариями"""
 
-    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -241,7 +264,12 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Comment.objects.none()
-        return Comment.objects.all()
+        user = self.request.user
+        if not user.is_authenticated:
+            return Comment.objects.none()
+        return Comment.objects.filter(
+            user_project_filter(user, 'task__project')
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -263,7 +291,6 @@ class TagViewSet(viewsets.ModelViewSet):
 
 class AttachmentViewSet(viewsets.ModelViewSet):
     """API для управления вложениями"""
-    queryset = Attachment.objects.all()
     serializer_class = AttachmentSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -272,7 +299,12 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Attachment.objects.none()
-        return Attachment.objects.all()
+        user = self.request.user
+        if not user.is_authenticated:
+            return Attachment.objects.none()
+        return Attachment.objects.filter(
+            user_project_filter(user, 'task__project')
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)

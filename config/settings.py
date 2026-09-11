@@ -2,11 +2,18 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Базовые настройки
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY: SECRET_KEY должен храниться в переменной окружения
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production-@8v7!9x2$#p5q&w3e4r6t7y8u9i0o1p2a3s4d5f6g7h8j9k0l1z2x3c4v5b6n7m8')
+# SECURITY: SECRET_KEY обязателен в переменных окружения — без него приложение не стартует
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'Переменная окружения SECRET_KEY не задана. '
+        'Сгенерируйте ключ и добавьте его в .env (см. .env.example).'
+    )
 
 # SECURITY: DEBUG должен быть False в production
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
@@ -26,7 +33,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'django_filters',
-    'drf_yasg',
+    'drf_spectacular',
     'corsheaders',
     'django_celery_beat',
     # Локальные приложения
@@ -129,7 +136,6 @@ AUTH_USER_MODEL = 'accounts.User'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -141,6 +147,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # SECURITY: Уменьшенное время жизни JWT токенов для production
@@ -152,21 +159,28 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Swagger / OpenAPI
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header',
-            'description': 'Введи токен в формате: Bearer <твой_jwt_access_токен>',
+# OpenAPI / Swagger
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Task Tracker API',
+    'DESCRIPTION': 'API для управления задачами по методологии PMBOK',
+    'VERSION': 'v1',
+    'CONTACT': {'email': 'support@tasktracker.com'},
+    'LICENSE': {'name': 'BSD License'},
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SECURITY': [{'jwtAuth': []}],
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+    },
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'jwtAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
         }
     },
-    'USE_SESSION_AUTH': False,
-    'SHOW_REQUEST_HEADERS': True,
-    'PERSIST_AUTH': True,
-    'REFETCH_SCHEMA_WITH_AUTH': True,
-    'REFETCH_SCHEMA_ON_LOGOUT': True,
 }
 
 # SECURITY: Настройки CORS для production
@@ -192,5 +206,57 @@ CELERY_BEAT_SCHEDULE = {
     'check-deadlines-every-hour': {
         'task': 'apps.tasks.tasks.check_deadlines_and_notify',
         'schedule': 3600.0,  # Каждый час (для тестов можно ставить 60.0)
+    },
+}
+
+# ==========================================
+# LOGGING
+# ==========================================
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name} {process:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOG_DIR / 'app.log',
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 3,
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': os.environ.get('LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }

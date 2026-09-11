@@ -1,9 +1,9 @@
-from rest_framework import filters, permissions, status, viewsets
+from rest_framework import filters, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
 
+from drf_spectacular.utils import extend_schema
+from apps.common.permissions import user_project_filter
 from apps.tasks.models import Task
 from .models import KanbanActivity, KanbanBoard, KanbanColumn
 from .serializers import (
@@ -13,10 +13,17 @@ from .serializers import (
 )
 
 
+class MoveTaskSerializer(serializers.Serializer):
+    task_id = serializers.IntegerField(help_text='ID задачи')
+    status = serializers.ChoiceField(
+        choices=Task.Status.choices,
+        help_text='Новый статус задачи',
+    )
+
+
 class KanbanColumnViewSet(viewsets.ModelViewSet):
     """API для управления колонками Канбан"""
 
-    queryset = KanbanColumn.objects.all()
     serializer_class = KanbanColumnSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
@@ -30,13 +37,12 @@ class KanbanColumnViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return KanbanColumn.objects.none()
 
-        return KanbanColumn.objects.filter(project__owner=user)
+        return KanbanColumn.objects.filter(user_project_filter(user)).distinct()
 
 
 class KanbanBoardViewSet(viewsets.ModelViewSet):
     """API для управления Канбан-досками"""
 
-    queryset = KanbanBoard.objects.all()
     serializer_class = KanbanBoardSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -48,26 +54,12 @@ class KanbanBoardViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return KanbanBoard.objects.none()
 
-        return KanbanBoard.objects.filter(project__owner=user)
+        return KanbanBoard.objects.filter(user_project_filter(user)).distinct()
 
-    @swagger_auto_schema(
-        operation_description="Переместить задачу между колонками",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['task_id', 'status'],
-            properties={
-                'task_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='ID задачи'),
-                'status': openapi.Schema(
-                    type=openapi.TYPE_STRING,
-                    description='Новый статус (backlog, todo, in_progress, review, done)',
-                ),
-            },
-        ),
-        responses={
-            200: openapi.Response("Задача успешно перемещена"),
-            400: "Ошибка валидации или WIP лимит",
-            404: "Задача или колонка не найдена",
-        },
+    @extend_schema(
+        summary="Переместить задачу между колонками",
+        request=MoveTaskSerializer,
+        responses={200: KanbanBoardSerializer},
     )
     @action(detail=True, methods=['post'])
     def move_task(self, request, pk=None):
@@ -90,12 +82,12 @@ class KanbanBoardViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Проверяем WIP лимит колонки назначения
+        # Проверяем WIP лимит колонки назначения (исключая саму перемещаемую задачу)
         try:
             column = KanbanColumn.objects.get(
                 project=board.project, type=new_status
             )
-            if column.is_wip_limit_reached():
+            if column.is_wip_limit_reached(exclude_task_id=task.id):
                 return Response(
                     {'error': f'WIP-лимит для колонки "{column.name}" достигнут.'},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -115,7 +107,6 @@ class KanbanBoardViewSet(viewsets.ModelViewSet):
 class KanbanActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """API для просмотра активности Канбан"""
 
-    queryset = KanbanActivity.objects.all()
     serializer_class = KanbanActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [filters.OrderingFilter]
@@ -129,4 +120,6 @@ class KanbanActivityViewSet(viewsets.ReadOnlyModelViewSet):
         if not user.is_authenticated:
             return KanbanActivity.objects.none()
 
-        return KanbanActivity.objects.filter(task__project__owner=user)
+        return KanbanActivity.objects.filter(
+            user_project_filter(user, 'task__project')
+        ).distinct()

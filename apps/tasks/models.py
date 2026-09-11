@@ -34,7 +34,7 @@ class Milestone(models.Model):
     def clean(self):
         super().clean()
         # PMBOK Phase Gate: нельзя закрыть Milestone, если есть незавершенные задачи
-        if self.status == self.Status.ACHIEVED and self.pk:
+        if self.status == self.Status.ACHIEVED:
             uncompleted = self.tasks.exclude(status=Task.Status.DONE).exists()
             if uncompleted:
                 raise ValidationError(
@@ -184,14 +184,36 @@ class Task(models.Model):
 
     @property
     def wbs_code(self) -> str:
-        """Рекурсивная генерация иерархического WBS-кода (например, 1.2.1)"""
+        """Рекурсивная генерация иерархического WBS-кода (например, 1.2.1)
+
+        Сегмент берётся из order, а при order=0 (значение по умолчанию, порядок
+        на доске ещё не задан) — из порядкового номера задачи среди соседей,
+        отсортированных по (order, id). Так код детерминирован и не зависит от
+        глобального id задачи.
+        """
         chain = []
         curr = self
         while curr:
-            chain.append(str(curr.order if curr.order else curr.id))
+            chain.append(curr._wbs_segment())
             curr = curr.parent_task
         return '.'.join(reversed(chain))
-    
+
+    def _wbs_segment(self) -> str:
+        if self.order:
+            return str(self.order)
+
+        siblings = Task.objects.filter(
+            project_id=self.project_id,
+            parent_task_id=self.parent_task_id,
+        ).order_by('order', 'id')
+
+        for position, sibling_id in enumerate(
+            siblings.values_list('id', flat=True), start=1
+        ):
+            if sibling_id == self.id:
+                return str(position)
+        return str(self.id)
+
     def __str__(self):
         return f"{self.get_type_display()}: {self.title}"
     

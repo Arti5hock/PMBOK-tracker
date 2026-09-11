@@ -16,7 +16,7 @@ interface DashboardProps {
   onSelectProject: (id: number) => void;
   onNewProject: () => void;
   onOpenTask: (task: any) => void;
-  refreshTrigger: boolean;
+  refreshTrigger: number;
 }
 
 export const Dashboard = ({ projects, onSelectProject, onNewProject, onOpenTask, refreshTrigger }: DashboardProps) => {

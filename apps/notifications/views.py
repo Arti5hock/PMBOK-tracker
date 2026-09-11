@@ -36,8 +36,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'])
     def mark_all_as_read(self, request):
         """Отметить все уведомления пользователя как прочитанные"""
-        self.get_queryset().filter(is_read=False).update(is_read=True)
-        return Response({'success': True, 'message': 'Все уведомления прочитаны'})
+        updated = Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+        return Response({'success': True, 'updated': updated, 'message': 'Все уведомления прочитаны'})
 
     @action(detail=False, methods=['get'])
     def unread_count(self, request):

@@ -91,11 +91,11 @@ export function TaskModal({ isOpen, onClose, onSuccess, projectId, task, default
         setType(task.type || 'task');
         setStatus(task.status || 'todo');
         setDueDate(task.due_date ? task.due_date.substring(0, 10) : '');
-        setParentId(task.parent || task.parent_task || '');
+        setParentId(task.parent_task || '');
         setMilestoneId(task.milestone || '');
         fetchComments(task.id);
         fetchAttachments(task.id);
-        setRaciList(task.raci || []);
+        setRaciList(task.raci_assignments || []);
         
         setIsEditing(false); // Существующую задачу открываем в режиме просмотра
       } else {
@@ -156,7 +156,7 @@ export function TaskModal({ isOpen, onClose, onSuccess, projectId, task, default
       type,
       status,
       due_date: dueDate ? `${dueDate}T23:59:59Z` : null,
-      parent: parentId ? Number(parentId) : null,
+      parent_task: parentId ? Number(parentId) : null,
       milestone: milestoneId ? Number(milestoneId) : null,
     };
 

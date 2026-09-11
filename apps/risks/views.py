@@ -1,9 +1,10 @@
+from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count
 
+from apps.common.permissions import user_project_filter
 from .models import Risk
 from .serializers import RiskSerializer
 
@@ -27,7 +28,7 @@ class RiskViewSet(viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Risk.objects.none()
 
-        return Risk.objects.filter(project__owner=user)
+        return Risk.objects.filter(user_project_filter(user)).distinct()
 
     @action(detail=False, methods=['get'])
     def summary(self, request):

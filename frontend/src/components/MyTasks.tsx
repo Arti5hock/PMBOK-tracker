@@ -4,9 +4,9 @@ import { CheckCircle2, AlertCircle, Clock, CheckCircle, Calendar, UserCheck } fr
 
 interface MyTasksProps {
   // Делаем projectId опциональным: если передан — локальная доска, если нет — глобальная
-  projectId?: number | null; 
+  projectId?: number | null;
   onOpenTask: (task: any) => void;
-  refreshTrigger?: boolean; 
+  refreshTrigger?: number;
 }
 
 export const MyTasks = ({ projectId, onOpenTask, refreshTrigger }: MyTasksProps) => {
@@ -41,7 +41,7 @@ export const MyTasks = ({ projectId, onOpenTask, refreshTrigger }: MyTasksProps)
         // Жесткая фильтрация: оставляем только те задачи, где юзер реально должен что-то делать
         const myAssigned = allTasks.filter((t: any) => {
           const isAssignee = t.assignees?.includes(myId);
-          const isRaciResponsible = t.raci?.some((r: any) => r.user === myId && (r.role === 'R' || r.role === 'A' || r.role === 'C' || r.role === 'I'));
+          const isRaciResponsible = t.raci_assignments?.some((r: any) => r.user === myId);
           return isAssignee || isRaciResponsible;
         });
 
@@ -59,7 +59,7 @@ export const MyTasks = ({ projectId, onOpenTask, refreshTrigger }: MyTasksProps)
   // Вычисляем конкретную роль юзера в задаче для отображения в интерфейсе
   const getMyRole = (task: any) => {
     if (!myUserId) return null;
-    const raciRecord = task.raci?.find((r: any) => r.user === myUserId);
+    const raciRecord = task.raci_assignments?.find((r: any) => r.user === myUserId);
     if (raciRecord) return raciRecord.role;
     if (task.assignees?.includes(myUserId)) return 'Исполнитель';
     return null;
